@@ -1,0 +1,111 @@
+import pandas as pd
+from tqdm import tqdm
+from datetime import datetime
+from psycopg2 import connect
+import numpy as np
+import kaggle
+
+
+def kaggle_data_fetch(dataset_name):
+    kaggle.api.authenticate()
+    kaggle.api.dataset_download_files(dataset_name,unzip = True)
+
+
+
+def insert_into_database(conn, data_df):
+    cur = conn.cursor()
+
+    insert_string = '''INSERT INTO airbnb_data("id", "name", "host_id", "host_name", "neighbourhood_group",
+        "neighbourhood", "latitude", "longitude", "room_type", "price",
+        "minimum_nights", "number_of_reviews", "last_review",
+        "reviews_per_month", "calculated_host_listings_count",
+        "availability_365") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+
+    if not isinstance(data_df, list):
+        data_df = data_df.to_dict('records')
+
+    final = []
+    for row in tqdm(data_df):
+        row = {k: v if not isinstance(v, float) or not np.isnan(v) else None for k, v in row.items()}
+
+        row_values = (
+            row.get('id'),
+            row.get('name'),
+            row.get('host_id'),
+            row.get('host_name'),
+            row.get('neighbourhood_group'),
+            row.get('neighbourhood'),
+            row.get('latitude'),
+            row.get('longitude'),
+            row.get('room_type'),
+            row.get('price'),
+            row.get('minimum_nights'),
+            row.get('number_of_reviews'),
+            row.get('last_review'),
+            row.get('reviews_per_month'),
+            row.get('calculated_host_listings_count'),
+            row.get('availability_365')
+        )
+
+        final.append(row_values)
+
+    # Batch insert into database
+    batch_size = 20000
+    for i in tqdm(range(0, len(final), batch_size)):
+        batch = final[i:i + batch_size]
+        if batch:
+            cur.executemany(insert_string, batch)
+
+    conn.commit()
+
+    return len(final)
+
+
+
+def transformed_data_into_database(conn,data_df):
+    cur = conn.cursor()
+
+    insert_string = '''INSERT INTO transformed_airbnb_data("id", "name", "host_id", "host_name", "neighbourhood_group",
+        "neighbourhood", "latitude", "longitude", "room_type", "price",
+       "minimum_nights", "number_of_reviews", "last_review",
+       "reviews_per_month", "calculated_host_listings_count",
+       "availability_365","review_date", "review_time", "avg_price_per_neighbourhood") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+
+    if type(data_df) != list:
+        data_df = data_df.to_dict('records')
+
+    final = []
+    for row in tqdm(data_df):
+        row_values = (
+            row.get('id'),
+            row.get('name'),
+            row.get('host_id'),
+            row.get('host_name'),
+            row.get('neighbourhood_group'),
+            row.get('neighbourhood'),
+            row.get('latitude'),
+            row.get('longitude'),
+            row.get('room_type'),
+            row.get('price'),
+            row.get('minimum_nights'),
+            row.get('number_of_reviews'),
+            row.get('last_review'),
+            row.get('reviews_per_month'),
+            row.get('calculated_host_listings_count'),
+            row.get('availability_365'),
+            row.get('review_date'),
+            row.get('review_time'),
+            row.get('avg_price_per_neighbourhood')
+        )
+
+        final.append(row_values)
+
+    batch_size = 20000
+    for i in tqdm(range(0, len(final), batch_size)):
+        batch = final[i:i + batch_size]
+        if batch:
+            cur.executemany(insert_string, batch)
+
+    conn.commit()
+
+    return len(final)
